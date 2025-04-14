@@ -26,7 +26,7 @@ async function initializeChatClient(config) {
     console.log('Chat UI: Initialisation du client Botpress...');
 
     try {
-        client = new chat.Client();
+        //client = new chat.Client();
 
         // Essayer de récupérer les infos depuis localStorage
         const storedToken = localStorage.getItem(`bp-chat-token-${chatConfig.webhookId}`);
