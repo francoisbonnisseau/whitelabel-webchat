@@ -2,9 +2,5 @@
 
 window.myWebchat.init({
     // !!! REMPLACEZ PAR VOTRE VRAI WEBHOOK ID !!!
-    webhookId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', // Trouvé dans Botpress -> Intégrations -> Chat -> Webhook URL
-
-    // Options de personnalisation (optionnel)
-    themeColor: '#FF5733',
-    title: 'Support Client Rapide'
+    webhookId: 'b7627a2e-bc21-4e87-a208-051980adb518', // Trouvé dans Botpress -> Intégrations -> Chat -> Webhook URL
 });
