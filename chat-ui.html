@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <link rel="stylesheet" href="chat-ui.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <span>Assistance</span>
+             <button id="close-button" title="Fermer le chat">×</button>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <!-- Messages will appear here -->
+             <div id="loading-indicator" style="display: none; text-align: center; padding: 10px;">Chargement...</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Tapez votre message..." disabled>
+            <button id="chat-send-button" disabled>Envoyer</button>
+        </div>
+    </div>
+    <!-- Import client depuis CDN (pour éviter build step initial) -->
+    <script type="module" src="chat-ui.js"></script>
+</body>
+</html>
