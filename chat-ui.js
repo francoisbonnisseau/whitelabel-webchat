@@ -33,9 +33,9 @@ async function initializeChatClient(config) {
         const storedConversationId = localStorage.getItem(`bp-chat-conv-${chatConfig.webhookId}`);
 
         // Connecter avec ou sans token existant
-        await client.connect({
+        client = await chat.Client.connect({
             webhookId: chatConfig.webhookId,
-            ...(storedToken && { token: storedToken }) // Inclut le token s'il existe
+            ...(storedToken && { token: storedToken }) // Passe le token s'il existe
         });
         isConnected = true;
         userId = client.user.id; // Récupérer l'ID utilisateur
