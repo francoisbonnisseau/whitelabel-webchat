@@ -31,20 +31,21 @@ async function initializeChatClient(config) {
         // Essayer de récupérer les infos depuis localStorage
         const storedToken = localStorage.getItem(`bp-chat-token-${chatConfig.webhookId}`);
         const storedConversationId = localStorage.getItem(`bp-chat-conv-${chatConfig.webhookId}`);
-
+        console.log('Stored token before connect (for debug):', storedToken);
         // Connecter avec ou sans token existant
         client = await chat.Client.connect({
             webhookId: chatConfig.webhookId,
-            ...(storedToken && { token: storedToken }) // Passe le token s'il existe
+            //...(storedToken && { token: storedToken }) // Passe le token s'il existe
         });
         isConnected = true;
         userId = client.user.id; // Récupérer l'ID utilisateur
         console.log('Connecté. User ID:', userId);
 
-        // Sauvegarder le nouveau token (ou le même)
-        if (client.config.token) {
+        // Si la connexion réussit, sauvegarder le token obtenu maintenant
+         if (client.config?.token) {
              localStorage.setItem(`bp-chat-token-${chatConfig.webhookId}`, client.config.token);
-        }
+             console.log('Nouveau token sauvegardé.');
+         }
 
 
         // Gérer la conversation
