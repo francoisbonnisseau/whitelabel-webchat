@@ -187,6 +187,6 @@
 
     const toggleChat = () => chatState === 'opened' ? closeChat() : openChat();
 
-    window.myWebchat = { init, open, close, toggle, on };
+    window.myWebchat = { init, open, close, toggleChat, on };
 
 })();
