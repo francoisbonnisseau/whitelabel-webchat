@@ -27,7 +27,7 @@
         chatIframe = document.createElement('iframe');
         chatIframe.id = iframeId;
         chatIframe.title = config.title || 'Chat Widget';
-        chatIframe.style.display = 'none'; // Caché initialement par style CSS aussi
+        //chatIframe.style.display = 'none'; // Caché initialement par style CSS aussi
         chatIframe.setAttribute('frameborder', '0');
         chatIframe.src = chatUiUrl; // Charger l'UI
 
