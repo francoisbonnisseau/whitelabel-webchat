@@ -46,7 +46,7 @@
         fabButton.id = fabId;
         fabButton.setAttribute('aria-label', 'Ouvrir le chat');
         fabButton.setAttribute('aria-expanded', 'false');
-        fabButton.innerHTML = '->💬<-'; // Icône simple
+        fabButton.innerHTML = '💬'; // Icône simple
         fabButton.onclick = toggleChat;
 
         document.body.appendChild(fabButton);
