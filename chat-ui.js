@@ -6,6 +6,8 @@ const chatInput = document.getElementById('chat-input');
 const chatSendButton = document.getElementById('chat-send-button');
 const loadingIndicator = document.getElementById('loading-indicator');
 const closeButton = document.getElementById('close-button');
+const errorMessageDisplay = document.getElementById('error-message-display');
+const welcomeMessage = document.querySelector('.welcome-message');
 
 let chatConfig = {};
 let client = null;
@@ -13,6 +15,7 @@ let conversationId = null;
 let currentListener = null;
 let isConnected = false;
 let userId = null;
+let isFirstMessage = true;
 
 // --- Initialisation ---
 async function initializeChatClient(config) {
@@ -26,31 +29,29 @@ async function initializeChatClient(config) {
     console.log('Chat UI: Initialisation du client Botpress...');
 
     try {
-        //client = new chat.Client();
-
         // Essayer de récupérer les infos depuis localStorage
         const storedToken = localStorage.getItem(`bp-chat-token-${chatConfig.webhookId}`);
         const storedConversationId = localStorage.getItem(`bp-chat-conv-${chatConfig.webhookId}`);
         console.log('Stored token before connect (for debug):', storedToken);
+        
         // Connecter avec ou sans token existant
         client = await chat.Client.connect({
             webhookId: chatConfig.webhookId,
-            //...(storedToken && { token: storedToken }) // Passe le token s'il existe
         });
+        
         isConnected = true;
         userId = client.user.id; // Récupérer l'ID utilisateur
         console.log('Connecté. User ID:', userId);
 
         // Si la connexion réussit, sauvegarder le token obtenu maintenant
-         if (client.config?.token) {
-             localStorage.setItem(`bp-chat-token-${chatConfig.webhookId}`, client.config.token);
-             console.log('Nouveau token sauvegardé.');
-         }
-
+        if (client.config?.token) {
+            localStorage.setItem(`bp-chat-token-${chatConfig.webhookId}`, client.config.token);
+            console.log('Nouveau token sauvegardé.');
+        }
 
         // Gérer la conversation
         if (storedConversationId) {
-             // Optionnel: Valider l'ancienne conversation ? Pour la simplicité, on la réutilise.
+            // Optionnel: Valider l'ancienne conversation ? Pour la simplicité, on la réutilise.
             conversationId = storedConversationId;
             console.log('Conversation existante réutilisée:', conversationId);
         } else {
@@ -69,6 +70,9 @@ async function initializeChatClient(config) {
         enableChatInput();
         notifyLoaderReady(); // Informer le loader que tout est prêt
 
+        // Focus sur le champ d'entrée
+        chatInput.focus();
+
     } catch (error) {
         console.error("Erreur d'initialisation du client:", error);
         showError("Impossible d'initialiser le chat. Vérifiez la configuration.");
@@ -83,10 +87,17 @@ async function loadMessageHistory() {
     console.log("Chargement de l'historique...");
     try {
         const { messages } = await client.listMessages({ conversationId });
-        chatMessagesContainer.innerHTML = ''; // Nettoyer avant d'ajouter
-        messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)) // Trier au cas où
-                 .forEach(renderMessage);
-        scrollToBottom();
+
+        if (messages.length > 0) {
+            hideWelcomeMessage();
+            
+            chatMessagesContainer.innerHTML = ''; // Nettoyer avant d'ajouter
+            messages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)) // Trier au cas où
+                    .forEach(renderMessage);
+            
+            isFirstMessage = false;
+            scrollToBottom();
+        }
     } catch (error) {
         console.error("Erreur chargement historique:", error);
         showError("Erreur lors du chargement de l'historique.");
@@ -97,6 +108,11 @@ function renderMessage(message) {
     const isUser = message.userId === userId;
     const messageDiv = document.createElement('div');
     messageDiv.className = `chat-message ${isUser ? 'user-message' : 'bot-message'}`;
+    
+    if (isFirstMessage) {
+        hideWelcomeMessage();
+        isFirstMessage = false;
+    }
 
     // Pour l'instant, on gère seulement le texte
     if (message.payload?.type === 'text') {
@@ -110,17 +126,27 @@ function renderMessage(message) {
         messageDiv.appendChild(textP);
     }
     chatMessagesContainer.appendChild(messageDiv);
+    
+    // Animation de défilement
+    scrollToBottom();
 }
 
 async function handleSendMessage() {
     const text = chatInput.value.trim();
     if (!text || !client || !conversationId || !isConnected) return;
 
+    if (isFirstMessage) {
+        hideWelcomeMessage();
+    }
+
     // Affichage optimiste
     renderMessage({ userId: userId, payload: { type: 'text', text: text }});
     scrollToBottom();
     const messageToSend = text; // Copier la valeur avant de vider
     chatInput.value = '';
+    
+    // Ajuster la hauteur du textarea
+    adjustTextareaHeight();
 
     try {
         await client.createMessage({
@@ -136,7 +162,7 @@ async function handleSendMessage() {
             lastMsg.textContent += ' (Erreur envoi)';
             lastMsg.style.color = 'red';
         } else {
-             showError("Erreur lors de l'envoi du message.");
+            showError("Erreur lors de l'envoi du message.");
         }
         chatInput.value = messageToSend; // Remettre le texte dans l'input en cas d'erreur
     }
@@ -153,11 +179,21 @@ async function setupRealtimeListener() {
 
         currentListener.on('message_created', (ev) => {
             console.log('Message reçu (SSE):', ev);
-             // Vérifier si ce n'est pas notre propre message qui revient
-             if (ev.userId !== userId) {
+            // Vérifier si ce n'est pas notre propre message qui revient
+            if (ev.userId !== userId) {
+                showTypingIndicator(false);
                 renderMessage(ev);
                 scrollToBottom();
+                playNotificationSound();
             }
+        });
+        
+        currentListener.on('typing_started', () => {
+            showTypingIndicator(true);
+        });
+        
+        currentListener.on('typing_stopped', () => {
+            showTypingIndicator(false);
         });
 
         currentListener.on('error', (err) => {
@@ -172,8 +208,8 @@ async function setupRealtimeListener() {
 
     } catch(error) {
         console.error("Impossible d'écouter la conversation:", error);
-         showError("Erreur de connexion temps réel.");
-         isConnected = false;
+        showError("Erreur de connexion temps réel.");
+        isConnected = false;
     }
 }
 
@@ -184,9 +220,9 @@ async function reconnectListener() {
         // Le client ou le listener peut avoir une méthode connect/reconnect
         // Si listenConversation recrée le listener, il suffit de le rappeler
         await setupRealtimeListener(); // Relance l'écoute
-         // Recharger l'historique peut être utile pour récupérer les messages manqués
+        // Recharger l'historique peut être utile pour récupérer les messages manqués
         await loadMessageHistory();
-        showError(""); // Effacer le message d'erreur si succès
+        hideError(); // Effacer le message d'erreur si succès
         console.log("Reconnecté !");
 
     } catch (error) {
@@ -196,28 +232,67 @@ async function reconnectListener() {
     }
 }
 
-
-// --- Utilitaires UI ---
+// --- Utilitaires et amélioration UX ---
 function showLoading(isLoading) {
-    loadingIndicator.style.display = isLoading ? 'block' : 'none';
+    loadingIndicator.style.display = isLoading ? 'flex' : 'none';
     chatInput.disabled = isLoading;
     chatSendButton.disabled = isLoading;
 }
 
+function showTypingIndicator(isTyping) {
+    loadingIndicator.style.display = isTyping ? 'flex' : 'none';
+}
+
 function showError(message) {
     console.error("Chat UI Error:", message);
-    // Simplifié: pour l'instant on log juste, on pourrait l'afficher dans l'UI
-     const errorDiv = document.getElementById('error-message-display'); // Element à ajouter dans chat-ui.html
-    if(errorDiv) errorDiv.textContent = message;
+    if (!message) {
+        errorMessageDisplay.style.display = 'none';
+        return;
+    }
+    
+    errorMessageDisplay.textContent = message;
+    errorMessageDisplay.style.display = 'block';
+    scrollToBottom();
+}
+
+function hideError() {
+    errorMessageDisplay.style.display = 'none';
+}
+
+function hideWelcomeMessage() {
+    if (welcomeMessage) {
+        welcomeMessage.style.display = 'none';
+    }
 }
 
 function enableChatInput() {
-     chatInput.disabled = false;
-     chatSendButton.disabled = false;
+    chatInput.disabled = false;
+    chatSendButton.disabled = false;
 }
 
 function scrollToBottom() {
-    chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+    setTimeout(() => {
+        chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+    }, 10);
+}
+
+function adjustTextareaHeight() {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = (chatInput.scrollHeight > 120 ? 120 : chatInput.scrollHeight) + 'px';
+}
+
+function playNotificationSound() {
+    // Créer un élément audio pour jouer un son de notification
+    const audio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA/+M4wAAAAAAAAAAAAEluZm8AAAAPAAAAAwAAAbAAWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMD/////////////////////////////////AAAAAExhdmM1OC4xMwAAAAAAAAAAAAAAACQAAAAAAAAAAAGwnMiaOAAAAAAAAAAAAAAAAAAAAP/jOMAAAAAAAAAAAABJbmZvAAAADwAAAAMAAAGwAFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIzAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA//////////////////////////////////8AAAAATGFtZTMuMTAwAAAAAAAAAAAAAAAAAP/u18AAAAAAAAAAAAAAAAAAAAAAAGQAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV/+PCJAAAAXsQYhMHAAAAGkOcLalYQhCGAG9ADABgEIwGNFdQ5Cg3pUaOwMXQDdB3AD44jKHAaQdD4ggkCQMTqD27DseHoPnwSh8HD2wMRMF4HggIpARRoKD3T8EOJxQJHRgKL1yKKHoZ2YWlVFBQXDgwS0sKQDEQOJcOD4DzAVBmZugWLJgYDL4QEBR4sGBJFYWALFgqJEI5kZmLqKkqbDhQSUVZGS58aD5jnTOIwJEhwQKEZBcwOXQu0q5a54vV13/+OETfoZlmMjzGvvMAAA0A5HhNaIAvX611W39Qw1q0QQBRBBJEBEAkDhPLlQBggcXFDEwspNSJ2VAF0HzQUGImLWJDImZbSFQwYyAwFgnBUQTFgCjAxQxMMIRDRRZY4aMGKjJw1IUmIGZgBoUGICZg4GBoZVQMQBDAQAwEAPP//9NHYcQMjAwQNMCcJDDpJgYBkRuTAQAGNsxswBBhLBBQlMXkbjFoFsxCCEMdwRzFZKIwCAdMcQeTAgDYxRAKFEMEwmTJJHoxGQGMIgJgwCMAgFjAHA0wDAWMJABDA4AwwYwAMCkGTBYAYyLQPGBTU1//+NETGE3HakVLGvxPYAAA0gAAACpX/+3XAAAAAQQAAAMDAwMDAwNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ==');
+    audio.volume = 0.3;
+    audio.play().catch(e => console.log('Lecture du son impossible:', e));
+}
+
+// --- Gestion du Textarea ---
+function initTextareaAutoResize() {
+    chatInput.addEventListener('input', () => {
+        adjustTextareaHeight();
+    });
 }
 
 // --- Communication avec le Loader ---
@@ -232,7 +307,7 @@ window.addEventListener('message', (event) => {
         initializeChatClient(event.data.payload);
     }
     if (event.data?.type === 'focus-input') {
-         chatInput?.focus();
+        chatInput?.focus();
     }
 });
 
